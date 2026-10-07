@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spain News Agent</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="flag" aria-hidden="true"></span>Spain News Agent</div>
+    <div id="account" class="account" hidden>
+      <span id="account-name"></span>
+      <button id="sign-out" class="button ghost" type="button">Sign out</button>
+    </div>
+  </header>
+
+  <main>
+    <p id="loading" class="muted">Loading…</p>
+
+    <section id="signed-out" class="card hero" hidden>
+      <h1>Today's top news about Spain, checked live by an AI agent</h1>
+      <p>
+        The agent works on your behalf with its own Microsoft Entra agent identity.
+        Signing in is protected by Conditional Access: you'll be asked for your password and MFA.
+      </p>
+      <p id="signin-message" hidden></p>
+      <a class="button primary" href="/login">Sign in with Microsoft</a>
+    </section>
+
+    <section id="signed-in" hidden>
+      <div class="card identity">
+        <h2>Your session</h2>
+        <dl>
+          <dt>Signed in as</dt><dd id="id-user"></dd>
+          <dt>Authentication</dt><dd id="id-auth"></dd>
+          <dt>Agent identity</dt><dd id="id-agent"></dd>
+          <dt>Delegated scopes</dt><dd id="id-scopes"></dd>
+          <dt>Sign-in valid until</dt><dd id="id-expires"></dd>
+        </dl>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Top 5 news about Spain</h2>
+          <button id="get-news" class="button primary" type="button">Get today's top 5</button>
+        </div>
+        <ol id="news-activity" class="activity" hidden></ol>
+        <p id="news-error" class="error" hidden></p>
+        <div id="news" class="stories"></div>
+      </div>
+
+      <div class="card">
+        <h2>Ask the agent</h2>
+        <div id="messages" class="messages">
+          <p id="chat-hint" class="muted">
+            Ask about current news in Spain, for example “Tell me more about story 2” or
+            “What's happening with housing?”
+          </p>
+        </div>
+        <form id="chat-form" class="chat-form" autocomplete="off">
+          <input id="chat-input" type="text" maxlength="500" placeholder="Ask about news in Spain…" aria-label="Your question">
+          <button id="chat-send" class="button primary" type="submit">Send</button>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <footer class="muted">Microsoft Entra Agent ID (on-behalf-of) · Mistral · Google News</footer>
+</body>
+</html>
