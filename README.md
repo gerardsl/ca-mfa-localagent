@@ -89,7 +89,9 @@ multi-valued String attribute such as `CompanyOrg.Org = ["IT"]`:
 | `attribute-only` | **Include** `Org -contains "IT"`; no exclusions | Every IT-tagged resource, including non-agent enterprise apps |
 
 For this OBO app, tag the **blueprint's service principal**, not just the child agent identity.
-The guide explains the required attribute roles, Graph assignment, scope trade-offs, switching and
+The dedicated [API assignment guide](docs/ASSIGN_CUSTOM_ATTRIBUTES.md) shows how to look up and tag
+both service principals, including collection and single-value payloads and required roles.
+The policy guide explains the required attribute roles, Graph assignment, scope trade-offs, switching and
 verification. New attribute policies are report-only unless explicitly enabled:
 
 ```powershell

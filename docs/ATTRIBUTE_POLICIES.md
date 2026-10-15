@@ -79,6 +79,10 @@ token cache is local, outside the repository; delete it when finished.
 For this application, tag the blueprint's **enterprise application / service principal**, not just the
 child agent identity. A tag on a child identity is not automatically copied to its blueprint.
 
+For separate lookup, assignment and verification requests for **both** objects, see
+[Assign custom security attributes to agents using Microsoft Graph](ASSIGN_CUSTOM_ATTRIBUTES.md).
+That guide also covers single-valued attributes and preserving existing assignments.
+
 ```powershell
 python setup\create_attribute_ca_policy.py --mode agent-only --tag-blueprint --report-only
 ```
