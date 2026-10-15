@@ -25,6 +25,29 @@ from provision_entra import BLUEPRINT_NAME, ENV_PATH, read_env
 POLICY_NAME = os.environ.get("CA_POLICY_NAME") or "Spain-News-Agent-CA"
 
 
+def build_policy(name: str, applications: dict, *, state: str = "enabled", reauthenticate: bool = True) -> dict:
+    return {
+        "displayName": name,
+        "state": state,
+        "conditions": {
+            "clientAppTypes": ["all"],
+            "users": {"includeUsers": ["All"]},
+            "applications": applications,
+        },
+        "grantControls": {"operator": "OR", "builtInControls": ["mfa"]},
+        # "Every time" only supports primary and secondary authentication, not MFA-only.
+        "sessionControls": {
+            "signInFrequency": {
+                "isEnabled": True,
+                "frequencyInterval": "everyTime",
+                "authenticationType": "primaryAndSecondaryAuthentication",
+            }
+        }
+        if reauthenticate
+        else None,
+    }
+
+
 def upsert(body: dict) -> str:
     existing = [
         p
@@ -56,26 +79,12 @@ def main() -> None:
     if sd.get("isEnabled"):
         raise SystemExit("Security defaults are enabled; Conditional Access policies can't be used until they're disabled.")
 
-    body = {
-        "displayName": POLICY_NAME,
-        "state": "enabledForReportingButNotEnforced" if args.report_only else "enabled",
-        "conditions": {
-            "clientAppTypes": ["all"],
-            "users": {"includeUsers": ["All"]},
-            "applications": {"includeApplications": [blueprint_app_id]},
-        },
-        "grantControls": {"operator": "OR", "builtInControls": ["mfa"]},
-        # "Every time" only supports full reauthentication (password + MFA), not MFA-only.
-        "sessionControls": None
-        if args.no_reauth
-        else {
-            "signInFrequency": {
-                "isEnabled": True,
-                "frequencyInterval": "everyTime",
-                "authenticationType": "primaryAndSecondaryAuthentication",
-            }
-        },
-    }
+    body = build_policy(
+        POLICY_NAME,
+        {"includeApplications": [blueprint_app_id]},
+        state="enabledForReportingButNotEnforced" if args.report_only else "enabled",
+        reauthenticate=not args.no_reauth,
+    )
     policy_id = upsert(body)
 
     policy = graph("GET", f"/identity/conditionalAccess/policies/{policy_id}", retry_not_found=True)

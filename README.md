@@ -24,9 +24,9 @@ agent.py / web_app.py
 For OBO agents the token subject is the **user**, so Conditional Access targets users and the agent's
 resource (the blueprint), not the agent identity
 ([docs](https://learn.microsoft.com/entra/identity/conditional-access/agent-id)). The policy's
-sign-in frequency **Every time** makes Entra require a full sign-in (password + MFA) each time the agent
-is used, instead of reusing an earlier session (at most one prompt every 5 minutes; Entra only supports
-password + MFA, not MFA-only, with "Every time").
+sign-in frequency **Every time** requires fresh primary and multifactor authentication when Entra
+evaluates the session, with a five-minute tolerance. It does not prompt for every chat message;
+passwordless MFA can also satisfy the requirement.
 
 Running the agent locally doesn't bypass the policy: Entra enforces it when it issues the token.
 However, the news feeds and Mistral (API key) don't need Entra tokens, so in the CLI the sign-in gate
@@ -78,6 +78,29 @@ python agent.py -v              # CLI, also print token claims
 | Client app registration | `Spain-News-Agent-Client` (`CLIENT_APP_NAME`) | Public client users sign in with; pre-authorized on the blueprint scope |
 | Conditional Access policy | `Spain-News-Agent-CA` (`CA_POLICY_NAME`) | All users → resource: the blueprint → require MFA, sign-in frequency **Every time** |
 
+## Attribute-based Conditional Access: two options
+
+The optional [attribute-policy guide](docs/ATTRIBUTE_POLICIES.md) provides both approaches for a
+multi-valued String attribute such as `CompanyOrg.Org = ["IT"]`:
+
+| Mode | Resource selection | Scope |
+| --- | --- | --- |
+| `agent-only` | All agent resources; **Exclude** `Org -notContains "IT"` | IT-tagged agent resources only |
+| `attribute-only` | **Include** `Org -contains "IT"`; no exclusions | Every IT-tagged resource, including non-agent enterprise apps |
+
+For this OBO app, tag the **blueprint's service principal**, not just the child agent identity.
+The guide explains the required attribute roles, Graph assignment, scope trade-offs, switching and
+verification. New attribute policies are report-only unless explicitly enabled:
+
+```powershell
+python setup\admin_login.py --attributes
+python setup\create_attribute_ca_policy.py --mode agent-only --tag-blueprint --report-only
+python setup\check_ca.py --policy-name Spain-News-Agent-Attribute-CA
+```
+
+The definition must already exist in your own tenant. These policies use a separate, generic default
+name and do not remove the original single-resource MFA policy.
+
 ## Web UI (`web_app.py` + `web/`)
 
 Open http://localhost:5050, select **Sign in with Microsoft** (password + MFA through the Conditional
@@ -103,16 +126,19 @@ The full sequence of commands, with the issues hit and how they were fixed, is i
 | `setup/provision_entra.py` | Creates/updates the blueprint, principal, agent identity, client app, grants and secret; writes `.env` |
 | `setup/verify_entra.py` | Verifies the objects and the blueprint's exchange token for the agent identity (`fmi_path`) |
 | `setup/create_ca_policy.py` | Creates/updates the CA policy (`--report-only` for report-only mode, `--no-reauth` to allow reusing an earlier sign-in) |
-| `setup/check_ca.py` | What If evaluation + recent agent sign-ins with the applied CA policies |
+| `setup/create_attribute_ca_policy.py` | Optional attribute-based MFA: `--mode agent-only` or `--mode attribute-only`; explicit `--tag-blueprint`, `--enable` and `--report-only` options |
+| `setup/check_ca.py` | What If evaluation + recent agent sign-ins; `--policy-name` and `--resource-app-id` select what to check |
 
 ## Tests
 
 ```powershell
 python tests/test_news_agent.py --runs 1   # heuristics, feeds and live Mistral runs (no sign-in)
 python tests/test_web_app.py               # web UI: sign-in flow, CSRF/Host checks, streaming, chat
+python -m unittest discover -s tests -p test_attribute_ca_policy.py -v  # offline attribute-policy tests
 ```
 
-Both need a configured `.env` and internet access; the web test stubs the Entra parts that need a real user.
+The news and web tests need a configured `.env` and internet access; the web test stubs the Entra parts
+that need a real user. Attribute-policy tests are offline and never write to Entra.
 
 ## Notes
 

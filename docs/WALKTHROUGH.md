@@ -130,6 +130,30 @@ python setup/check_ca.py
 - `check_ca.py` runs the What If evaluation (`POST /identity/conditionalAccess/evaluate`), which shows
   the policy applies when a user signs in to the agent.
 
+### Optional: attribute-based targeting
+
+The [attribute-policy guide](ATTRIBUTE_POLICIES.md) documents both tested resource-targeting options.
+Create the multi-valued String definition in your own tenant first, then:
+
+```powershell
+python setup\admin_login.py --attributes
+# Conservative: agent resources only; exclude resources whose Org does not contain IT.
+python setup\create_attribute_ca_policy.py --mode agent-only --tag-blueprint --report-only
+python setup\check_ca.py --policy-name Spain-News-Agent-Attribute-CA
+
+# Alternative: positively include every resource whose Org contains IT, with no exclusions.
+python setup\create_attribute_ca_policy.py --mode attribute-only --report-only
+python setup\check_ca.py --policy-name Spain-News-Agent-Attribute-CA
+
+# After reviewing scope, choose one mode to enforce:
+python setup\create_attribute_ca_policy.py --mode agent-only --enable
+```
+
+Both commands use the same generic attribute-policy name by default, so they switch that policy
+instead of creating duplicates. To compare independently, supply different `--policy-name` values.
+The original single-resource policy is not removed. These filters inspect the sign-in resource
+principal; the guide explains why the blueprint principal needs the tag for this OBO app.
+
 ## 9. End-to-end run with the policy enforced
 
 ```powershell
@@ -144,9 +168,11 @@ normal device code confirmation step.
 ## 10. Sign-in frequency "Every time"
 
 `create_ca_policy.py` adds the session control sign-in frequency **Every time**, so a recent MFA in the
-browser can't be reused. Entra rejects MFA-only re-authentication for it (`1144: The 'every time'
+browser cannot be reused indefinitely. Entra rejects MFA-only re-authentication for it (`1144: The 'every time'
 sign-in frequency session control only allows 'primaryAndSecondaryAuthentication'`), so each sign-in
-asks for password + MFA (at most once every 5 minutes). `--no-reauth` removes the setting.
+evaluation requires primary and multifactor authentication, with a five-minute tolerance. Passwordless
+MFA can satisfy it; an existing token or web session does not trigger a prompt for every message.
+`--no-reauth` removes the setting from the original single-resource policy.
 
 To see the prompt, wait at least 5 minutes after the last MFA, then run:
 
@@ -210,3 +236,4 @@ Remove-Item "$env:LOCALAPPDATA\ca-mfa-localagent" -Recurse -Force   # cached adm
 - [Target agent identities in Conditional Access](https://learn.microsoft.com/entra/identity/conditional-access/howto-target-agent-identities)
 - [Adaptive session lifetime (sign-in frequency)](https://learn.microsoft.com/entra/identity/conditional-access/concept-session-lifetime)
 - [conditionalAccessRoot: evaluate (What If)](https://learn.microsoft.com/graph/api/conditionalaccessroot-evaluate)
+- [Filter for applications using custom security attributes](https://learn.microsoft.com/entra/identity/conditional-access/concept-filter-for-applications)

@@ -19,15 +19,18 @@ from provision_entra import ENV_PATH, read_env
 def main() -> None:
     parser = argparse.ArgumentParser(description="Verify Conditional Access for the agent.")
     parser.add_argument("--user", help="user principal name to evaluate (default: the signed-in admin)")
+    parser.add_argument("--policy-name", default=POLICY_NAME, help="policy to highlight in the What If results")
+    parser.add_argument("--resource-app-id", help="resource app ID to evaluate (default: the blueprint in .env)")
     parser.add_argument("--top", type=int, default=5, help="number of recent sign-ins to show")
     args = parser.parse_args()
 
     env = read_env(ENV_PATH)
-    blueprint_app_id, client_app_id = env["BLUEPRINT_APP_ID"], env["AGENT_CLIENT_APP_ID"]
+    resource_app_id = args.resource_app_id or env["BLUEPRINT_APP_ID"]
+    client_app_id = env["AGENT_CLIENT_APP_ID"]
     user_path = f"/users/{args.user}" if args.user else "/me"
     user = graph("GET", f"{user_path}?$select=id,userPrincipalName")
 
-    print(f"What If: {user['userPrincipalName']} signs in to the agent (resource {blueprint_app_id})")
+    print(f"What If: {user['userPrincipalName']} accesses resource {resource_app_id}")
     result = graph(
         "POST",
         "/identity/conditionalAccess/evaluate",
@@ -35,7 +38,7 @@ def main() -> None:
             "signInIdentity": {"@odata.type": "#microsoft.graph.userSignIn", "userId": user["id"]},
             "signInContext": {
                 "@odata.type": "#microsoft.graph.applicationContext",
-                "includeApplications": [blueprint_app_id],
+                "includeApplications": [resource_app_id],
             },
             "signInConditions": {"clientAppType": "mobileAppsAndDesktopClients", "devicePlatform": "windows"},
             "appliedPoliciesOnly": True,
@@ -46,10 +49,10 @@ def main() -> None:
         grant = policy.get("grantControls") or {}
         frequency = (policy.get("sessionControls") or {}).get("signInFrequency") or {}
         reauth = f" sign-in frequency={frequency.get('frequencyInterval')}" if frequency.get("isEnabled") else ""
-        marker = "  <== agent policy" if policy.get("displayName") == POLICY_NAME else ""
+        marker = "  <== selected policy" if policy.get("displayName") == args.policy_name else ""
         print(f"  - {policy['displayName']} [{policy.get('state')}] grant={grant.get('builtInControls')}{reauth}{marker}")
-    if not any(p.get("displayName") == POLICY_NAME for p in applied):
-        print(f"  WARNING: '{POLICY_NAME}' does not apply to this sign-in.")
+    if not any(p.get("displayName") == args.policy_name for p in applied):
+        print(f"  WARNING: '{args.policy_name}' does not apply to this sign-in.")
 
     print(f"\nRecent sign-ins to the agent (client app {client_app_id}):")
     try:

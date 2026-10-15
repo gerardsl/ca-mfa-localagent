@@ -56,6 +56,12 @@ SCOPES = [
     "Directory.Read.All",
 ]
 
+# Attribute administration is optional; the normal setup does not request these permissions.
+ATTRIBUTE_SCOPES = SCOPES + [
+    "CustomSecAttributeAssignment.ReadWrite.All",
+    "CustomSecAttributeDefinition.Read.All",
+]
+
 
 class GraphError(RuntimeError):
     def __init__(self, method: str, url: str, status: int, text: str):
@@ -118,9 +124,9 @@ def _save(cache: msal.SerializableTokenCache) -> None:
             f.write(cache.serialize())
 
 
-def login_device_code(tenant: str | None = None) -> dict:
+def login_device_code(tenant: str | None = None, *, scopes: list[str] | None = None) -> dict:
     app, cache = _app(tenant)
-    flow = app.initiate_device_flow(scopes=SCOPES)
+    flow = app.initiate_device_flow(scopes=SCOPES if scopes is None else scopes)
     if "user_code" not in flow:
         raise SystemExit(f"Could not start the device code flow: {json.dumps(flow, indent=2)}")
     print(flow["message"], flush=True)
@@ -131,7 +137,11 @@ def login_device_code(tenant: str | None = None) -> dict:
     return result
 
 
-def get_token() -> str:
+def get_token(*, scopes: list[str] | None = None) -> str:
+    requested_scopes = SCOPES if scopes is None else scopes
+    login_command = "python setup/admin_login.py"
+    if any(scope.startswith("CustomSecAttribute") for scope in requested_scopes):
+        login_command += " --attributes"
     app, cache = _app()
     accounts = app.get_accounts()
     if TENANT_ID:
@@ -139,11 +149,11 @@ def get_token() -> str:
     if ADMIN_UPN:
         accounts = [a for a in accounts if a.get("username", "").lower() == ADMIN_UPN.lower()]
     if not accounts:
-        raise SystemExit("No cached admin sign-in. Run: python setup/admin_login.py")
-    result = app.acquire_token_silent(SCOPES, account=accounts[0])
+        raise SystemExit(f"No cached admin sign-in. Run: {login_command}")
+    result = app.acquire_token_silent(requested_scopes, account=accounts[0])
     if not result or "access_token" not in result:
         error = (result or {}).get("error_description") or (result or {}).get("error")
-        raise SystemExit(f"Silent token acquisition failed ({error}). Run: python setup/admin_login.py")
+        raise SystemExit(f"Silent token acquisition failed ({error}). Run: {login_command}")
     _save(cache)
     return result["access_token"]
 
@@ -162,13 +172,14 @@ def graph(
     beta: bool = False,
     retry_not_found: bool = False,
     max_attempts: int = 8,
+    scopes: list[str] | None = None,
 ) -> Any:
     """Call Microsoft Graph. Retries throttling/transient errors and, when
     `retry_not_found` is set, replication delays right after object creation."""
     url = path if path.startswith("https://") else (GRAPH_BETA if beta else GRAPH) + path
     for attempt in range(1, max_attempts + 1):
         headers = {
-            "Authorization": f"Bearer {get_token()}",
+            "Authorization": f"Bearer {get_token(scopes=scopes)}",
             "OData-Version": "4.0",
             "Content-Type": "application/json",
             "ConsistencyLevel": "eventual",
